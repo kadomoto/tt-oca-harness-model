@@ -21,6 +21,7 @@
 #include "inc/axi_window_remap.h"
 
 #include <systemc>
+#include <string>
 #include <tlm_utils/simple_initiator_socket.h>
 
 namespace smu {
@@ -46,8 +47,11 @@ public:
     axi_window_remap<64, 64>  sep2smc_remap;
     idle_initiator            idle_jtag;
 
+    // `suffix` is appended to the SMU-owned module names (smu_xbar, ...) so
+    // that several dies can live in one process (mdie-vp). smu-vp uses "".
     explicit smu_platform(const char* smc_name = "dut",
-                          const char* sep_name = "och_sep_ss1");
+                          const char* sep_name = "och_sep_ss1",
+                          const std::string& suffix = "");
 };
 
 }  // namespace smu

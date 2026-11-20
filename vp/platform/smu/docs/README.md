@@ -155,3 +155,35 @@ slot land in the ROM and vanish (reads return 0).
   `sw/smu-vp-tests/run_smu_vp_tests.sh`. CI runs both the unit tests and
   this firmware suite (`smu-unit-tests` / `smu-vp` on Ubuntu,
   `smu-unit-tests-rhel8` / `smu-vp-rhel8` on RHEL 8).
+
+## Two dies (`mdie-vp`)
+
+`mdie-vp` builds two `smu_platform` dies in one process and cross-connects
+their AoUs (`aou_core::connect_peer()`), so each die's AoU peer is the other
+die's AoU instead of the in-platform stand-in (`aou_peer_` → `stub_sysmem`).
+
+```
+mdie-vp <smc-cci-ini> <sep-cci-ini> <sim_time_ms> \
+        <die0-smc-elf> <die0-sep-elf> <die1-smc-elf> <die1-sep-elf>
+```
+
+* Die 0 keeps the smu-vp names (`dut`, `och_sep_ss1`, `smu_xbar`); die 1 is
+  `dut1`, `och_sep_ss2`, `smu_xbar1`. Every preset loaded for die 0 is cloned
+  to die 1 before the per-die values are applied.
+* Die k's SMC global window is `0x4000_0000 + k * 64 MiB`. The crossbar
+  aperture is preset; each die's firmware programs its SMC fabric
+  `GLOBAL_BASE` CSR (`0xC001_0000`). The 64 MiB stride keeps die 1 clear of
+  die 0's outbound remap windows at base + 16..32 MiB.
+* Traffic to the other die's window leaves through `ext_out`, crosses the AoU
+  pair and enters through `ext_in`. The SMC inbound filter blocks by default,
+  so firmware must open an entry for the peer's traffic (non-secure).
+* `aou_irq` / `aou_peer_irq` are `SC_MANY_WRITERS`: activating one AoU
+  auto-acks its peer, and with two dies that write comes from the other die's
+  thread.
+* `MDIE_VP_VERBOSITY=<n>` overrides the report verbosity after elaboration.
+* One AoU per die means one pair. More dies need more AoU instances per die.
+
+With `dut.cluster.quantum_insts = 20` and `global_quantum_ns = 20`, a
+ping-pong between the two SMCs measures a round trip of about 74 ns +
+2 × `bridge_delay_ns` (74 / 80 / 261 ns at 0 / 8 / 100 ns). The default
+1 µs quantum hides delays below about 1 µs.

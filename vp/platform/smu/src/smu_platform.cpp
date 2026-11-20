@@ -19,13 +19,14 @@
 
 namespace smu {
 
-smu_platform::smu_platform(const char* smc_name, const char* sep_name)
+smu_platform::smu_platform(const char* smc_name, const char* sep_name,
+                           const std::string& suffix)
     : dut(smc_name)
     , sep(sep_name)
-    , xbar("smu_xbar")
-    , sep2smc_remap("sep2smc_remap",
+    , xbar(("smu_xbar" + suffix).c_str())
+    , sep2smc_remap(("sep2smc_remap" + suffix).c_str(),
                     SEP_SMC_REGION_BASE, SEP_SMC_REGION_SIZE, 0x0ULL)
-    , idle_jtag("idle_jtag")
+    , idle_jtag(("idle_jtag" + suffix).c_str())
 {
     // Dedicated SEP -> SMC path.
     sep.sep_ext_to_smc_axi.bind(sep2smc_remap.tgt);

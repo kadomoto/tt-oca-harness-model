@@ -209,8 +209,10 @@ public:
     aou::aou_core                      aou_peer_{"aou_peer"};
     sc_core::sc_signal<bool>           aou_fdi_active{"aou_fdi_active"};
     sc_core::sc_signal<bool>           aou_peer_fdi_active{"aou_peer_fdi_active"};
-    sc_core::sc_signal<bool>           aou_irq{"aou_irq"};
-    sc_core::sc_signal<bool>           aou_peer_irq{"aou_peer_irq"};
+    // SC_MANY_WRITERS: when another die's AoU is this AoU's peer (mdie-vp),
+    // that die's activate auto-acks this one from its own thread.
+    sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> aou_irq{"aou_irq"};
+    sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> aou_peer_irq{"aou_peer_irq"};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
 #endif

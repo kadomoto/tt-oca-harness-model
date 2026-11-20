@@ -345,6 +345,25 @@ set_target_properties(smu-vp smc_cluster_smu PROPERTIES
     BUILD_RPATH   "${_rpath}"
     INSTALL_RPATH "${_rpath}")
 
-install(TARGETS smu-vp smc_cluster_smu
+# -----------------------------------------------------------------------------
+# mdie-vp: two smu_platform dies in one process with their AoUs cross-connected.
+# Same sources, includes and link line as smu-vp; only sc_main differs.
+# -----------------------------------------------------------------------------
+add_executable(mdie-vp
+    mdie_main.cpp
+    src/smu_platform.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../smc/src/smc_platform.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../sep/src/sep_platform.cpp)
+foreach(_prop INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS LINK_LIBRARIES LINK_OPTIONS)
+    get_target_property(_val smu-vp ${_prop})
+    if(_val)
+        set_target_properties(mdie-vp PROPERTIES ${_prop} "${_val}")
+    endif()
+endforeach()
+set_target_properties(mdie-vp PROPERTIES
+    BUILD_RPATH   "${_rpath}"
+    INSTALL_RPATH "${_rpath}")
+
+install(TARGETS smu-vp mdie-vp smc_cluster_smu
         RUNTIME DESTINATION ./
         LIBRARY DESTINATION ./)
