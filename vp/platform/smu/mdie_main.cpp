@@ -323,10 +323,51 @@ int sc_main(int argc, char** argv)
         std::cout << "mdie-vp: global TLM quantum " << qns << " ns\n";
     }
 
+    // Optional chiplet logic per die: [uint] mdie.die<k>.user_base / user_size
+    // and [string] mdie.die<k>.user_model (a command; py_bridge protocol).
+    auto preset_u64 = [&](const std::string& key, uint64_t dflt) {
+        const cci::cci_value v = broker.get_preset_cci_value(key);
+        return v.is_uint64() ? v.get_uint64() : dflt;
+    };
+    auto preset_str = [&](const std::string& key) {
+        const cci::cci_value v = broker.get_preset_cci_value(key);
+        return v.is_string() ? v.get_string() : std::string();
+    };
+    std::array<uint64_t, NUM_DIES> user_base{}, user_size{};
+    std::array<std::string, NUM_DIES> user_model;
+    for (unsigned k = 0; k < NUM_DIES; ++k) {
+        const std::string p = "mdie.die" + std::to_string(k) + ".";
+        user_base[k] = preset_u64(p + "user_base", 0x7000'0000ULL);
+        user_size[k] = preset_u64(p + "user_size", 0);
+        user_model[k] = preset_str(p + "user_model");
+        if (user_size[k] > 0 && user_base[k] < 0x7000'0000ULL) {
+            std::cerr << "ERROR: die" << k << " user window must sit at or above 0x7000_0000"
+                         " (below are the SMC global windows and the SEP aperture)\n";
+            return 1;
+        }
+    }
+
     std::vector<std::unique_ptr<smu::smu_platform>> die;
+    std::vector<std::unique_ptr<sc_core::sc_module>> user_logic;
     for (unsigned k = 0; k < NUM_DIES; ++k) {
         const die_names n = names_of(k);
-        die.emplace_back(std::make_unique<smu::smu_platform>(n.smc.c_str(), n.sep.c_str(), n.suffix));
+        die.emplace_back(std::make_unique<smu::smu_platform>(n.smc.c_str(), n.sep.c_str(), n.suffix,
+                                                             user_base[k], user_size[k]));
+        if (user_size[k] > 0) {
+            const std::string mname = "user_logic" + n.suffix;
+            if (!user_model[k].empty()) {
+                auto b = std::make_unique<smu::py_bridge>(mname.c_str(), user_model[k]);
+                die.back()->user_out().bind(b->tgt);
+                user_logic.emplace_back(std::move(b));
+            } else {
+                auto e = std::make_unique<smu::error_target>(mname.c_str());
+                die.back()->user_out().bind(e->tgt);
+                user_logic.emplace_back(std::move(e));
+            }
+            std::cout << "mdie-vp: die" << k << " chiplet logic window 0x" << std::hex << user_base[k]
+                      << " +0x" << user_size[k] << std::dec
+                      << (user_model[k].empty() ? " (no model: accesses fail)" : "") << "\n";
+        }
         if (!die.back()->dut.cluster.load_elf({smc_elf[k]})) {
             std::cerr << "ERROR: die" << k << " cluster.load_elf failed for '" << smc_elf[k] << "'\n";
             return 1;

@@ -19,8 +19,10 @@
 
 #include "inc/smu_axi_xbar.h"
 #include "inc/axi_window_remap.h"
+#include "inc/user_port.h"
 
 #include <systemc>
+#include <memory>
 #include <string>
 #include <tlm_utils/simple_initiator_socket.h>
 
@@ -49,9 +51,18 @@ public:
 
     // `suffix` is appended to the SMU-owned module names (smu_xbar, ...) so
     // that several dies can live in one process (mdie-vp). smu-vp uses "".
+    // Optional window for the chiplet's own logic (mdie-vp): with
+    // user_size > 0, ext_out traffic in [user_base, +user_size) goes to
+    // user_out() instead of the AoU. smu-vp leaves it off.
+    std::unique_ptr<user_window_router> user_router;
+
     explicit smu_platform(const char* smc_name = "dut",
                           const char* sep_name = "och_sep_ss1",
-                          const std::string& suffix = "");
+                          const std::string& suffix = "",
+                          uint64_t user_base = 0, uint64_t user_size = 0);
+
+    // Bind the chiplet's own logic here (only when user_size > 0).
+    tlm_utils::simple_initiator_socket<user_window_router, 64>& user_out() { return user_router->to_user; }
 };
 
 }  // namespace smu

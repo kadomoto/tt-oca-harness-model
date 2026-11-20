@@ -20,7 +20,7 @@
 namespace smu {
 
 smu_platform::smu_platform(const char* smc_name, const char* sep_name,
-                           const std::string& suffix)
+                           const std::string& suffix, uint64_t user_base, uint64_t user_size)
     : dut(smc_name)
     , sep(sep_name)
     , xbar(("smu_xbar" + suffix).c_str())
@@ -55,8 +55,16 @@ smu_platform::smu_platform(const char* smc_name, const char* sep_name,
     // Unused SMC inbound ports.
     idle_jtag.sock.bind(dut.jtag_axi_in);
 
-    // Chiplet-facing boundary (RTL smu_axi_in/out) through local AOU.
-    xbar.ext_out.bind(dut.aou_axi_s);
+    // Chiplet-facing boundary (RTL smu_axi_in/out) through local AOU, with
+    // the optional chiplet-logic window split off first.
+    if (user_size > 0) {
+        user_router = std::make_unique<user_window_router>(
+            ("user_router" + suffix).c_str(), user_base, user_size);
+        xbar.ext_out.bind(user_router->in);
+        user_router->to_aou.bind(dut.aou_axi_s);
+    } else {
+        xbar.ext_out.bind(dut.aou_axi_s);
+    }
     dut.aou_axi_m.bind(xbar.ext_in);
 
     // SEP outbound mailbox interrupts -> SMC (RTL smu.sv: sep.smc_mailbox_interrupt_o

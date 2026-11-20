@@ -190,3 +190,20 @@ With `dut.cluster.quantum_insts = 20` and `global_quantum_ns = 20`, a
 ping-pong between the two SMCs measures a round trip of about 74 ns +
 2 × `bridge_delay_ns` (74 / 80 / 261 ns at 0 / 8 / 100 ns). The default
 1 µs quantum hides delays below about 1 µs.
+
+### Chiplet logic window
+
+The part of a chiplet that is not the Harness can be attached to a die for
+early exploration. With `[uint] mdie.die<k>.user_size` > 0, a router sits
+between the SMU crossbar's `ext_out` and the local AoU and sends
+`[mdie.die<k>.user_base, +user_size)` (default base `0x7000_0000`; it must sit
+at or above it) to the chiplet logic instead of the AoU. Firmware on that die
+reaches it with plain loads and stores; the SEP's outbound traffic can too.
+
+`[string] mdie.die<k>.user_model` names a command that implements the logic
+(`inc/user_port.h`, `py_bridge`): mdie-vp starts it and sends one line per
+access over pipes (`R <off> <len> <time_ns>` / `W <off> <len> <value>
+<time_ns>`), and the process answers `OK <value> <delay_ns>`. The simulation
+time travels with every access, so time-dependent behaviour can be evaluated
+lazily. Without a command, accesses to the window fail with an address error.
+The window has no interrupt line yet.
