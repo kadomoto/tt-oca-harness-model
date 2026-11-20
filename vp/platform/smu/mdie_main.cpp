@@ -17,8 +17,10 @@
 // Every preset loaded for die 0 is cloned to die 1, then the per-die values
 // below are applied.
 //
-// Global address map: die k's SMC global window is 0x4000_0000 + k * 64 MiB
-// (each SMC's own outbound remap windows occupy base + 16..32 MiB).
+// Global address map: die k's SMC global window comes from the ini key
+// `mdie.die<k>.smc_global_base` (uint), default 0x4000_0000 + k * 32 MiB. Each
+// SMC claims 32 MiB (its window plus its outbound remap windows at
+// base + 16..32 MiB), so the windows must be 16 MiB aligned and 32 MiB apart.
 // The SMU crossbar aperture (smu_xbar*.smc_global_base) is preset here; the
 // SMC fabric's own GLOBAL_BASE CSR (0xC001_0000) is programmed by each die's
 // firmware at boot, as on silicon. Traffic one die sends to the other die's
@@ -180,7 +182,10 @@ namespace {
 
 constexpr unsigned NUM_DIES = 2;
 constexpr uint64_t SMC_GLOBAL_BASE0  = 0x4000'0000ULL;
-constexpr uint64_t SMC_GLOBAL_STRIDE = 0x0400'0000ULL;   // 64 MiB per die: clears the M-mode and Xvisor remap windows at base + 16..32 MiB
+// Each SMC claims 32 MiB of the global map: its 16 MiB window plus the M-mode
+// and Xvisor outbound remap windows at base + 16 MiB and base + 24 MiB.
+constexpr uint64_t SMC_GLOBAL_FOOTPRINT = 0x0200'0000ULL;
+constexpr uint64_t SMC_GLOBAL_ALIGN     = 0x0100'0000ULL;
 
 struct die_names {
     std::string smc, sep, suffix;
@@ -261,9 +266,29 @@ int sc_main(int argc, char** argv)
         clone_presets(n0.sep, n.sep, {"targets"});
     }
 
+    std::array<uint64_t, NUM_DIES> smc_global_base{};
+    for (unsigned k = 0; k < NUM_DIES; ++k) {
+        smc_global_base[k] = SMC_GLOBAL_BASE0 + k * SMC_GLOBAL_FOOTPRINT;
+        const cci::cci_value v = broker.get_preset_cci_value("mdie.die" + std::to_string(k) + ".smc_global_base");
+        if (v.is_uint64()) smc_global_base[k] = v.get_uint64();
+        if (smc_global_base[k] % SMC_GLOBAL_ALIGN != 0) {
+            std::cerr << "ERROR: die" << k << " SMC global base 0x" << std::hex << smc_global_base[k]
+                      << " is not 16 MiB aligned\n";
+            return 1;
+        }
+    }
+    for (unsigned a = 0; a < NUM_DIES; ++a)
+        for (unsigned b = a + 1; b < NUM_DIES; ++b)
+            if (smc_global_base[a] < smc_global_base[b] + SMC_GLOBAL_FOOTPRINT &&
+                smc_global_base[b] < smc_global_base[a] + SMC_GLOBAL_FOOTPRINT) {
+                std::cerr << "ERROR: die" << a << " and die" << b << " SMC global windows overlap"
+                             " (each needs 32 MiB: window + outbound remap windows)\n";
+                return 1;
+            }
+
     for (unsigned k = 0; k < NUM_DIES; ++k) {
         const die_names n = names_of(k);
-        const uint64_t smc_global = SMC_GLOBAL_BASE0 + k * SMC_GLOBAL_STRIDE;
+        const uint64_t smc_global = smc_global_base[k];
         broker.set_preset_cci_value(n.sep + ".smc_global.forward_en", cci::cci_value(true));
         broker.set_preset_cci_value(n.sep + ".sep_global_base", cci::cci_value(uint64_t(0x5000'0000ULL)));
         const cci::cci_value xbar_sep_size = broker.get_preset_cci_value(n.xbar() + ".sep_region_size");

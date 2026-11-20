@@ -170,10 +170,13 @@ mdie-vp <smc-cci-ini> <sep-cci-ini> <sim_time_ms> \
 * Die 0 keeps the smu-vp names (`dut`, `och_sep_ss1`, `smu_xbar`); die 1 is
   `dut1`, `och_sep_ss2`, `smu_xbar1`. Every preset loaded for die 0 is cloned
   to die 1 before the per-die values are applied.
-* Die k's SMC global window is `0x4000_0000 + k * 64 MiB`. The crossbar
-  aperture is preset; each die's firmware programs its SMC fabric
-  `GLOBAL_BASE` CSR (`0xC001_0000`). The 64 MiB stride keeps die 1 clear of
-  die 0's outbound remap windows at base + 16..32 MiB.
+* Die k's SMC global window comes from `[uint] mdie.die<k>.smc_global_base`
+  in the SMC ini (default `0x4000_0000 + k * 32 MiB`). Each SMC claims
+  32 MiB of the global map, its window plus its outbound remap windows at
+  base + 16..32 MiB, so mdie-vp rejects windows that are not 16 MiB aligned
+  or are closer than 32 MiB. The crossbar aperture is preset from the same
+  value; each die's firmware programs its SMC fabric `GLOBAL_BASE` CSR
+  (`0xC001_0000`) to match.
 * Traffic to the other die's window leaves through `ext_out`, crosses the AoU
   pair and enters through `ext_in`. The SMC inbound filter blocks by default,
   so firmware must open an entry for the peer's traffic (non-secure).
