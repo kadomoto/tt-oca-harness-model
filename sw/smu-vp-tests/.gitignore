@@ -17,3 +17,4 @@ smu-rom-boot-test/smc.ini
 
 # AOU delay test: the SMC ini generated with its [double] delay/tick overrides.
 smu-aou-delay-test/smc.ini
+smu-aou-delay-test/.params.stamp

@@ -22,8 +22,14 @@
 
 extern int printf(const char *fmt, ...);
 
-#define BRIDGE_DELAY_NS         10000u   /* keep in sync with Makefile */
-#define MTIME_TICK_NS           100u     /* keep in sync with Makefile */
+/* Normally injected by the Makefile (-D) from the same values it writes into
+ * smc.ini; these defaults only apply to a direct `make -f smc.mk`. */
+#ifndef BRIDGE_DELAY_NS
+#define BRIDGE_DELAY_NS         10000u
+#endif
+#ifndef MTIME_TICK_NS
+#define MTIME_TICK_NS           100u
+#endif
 
 #define AOU_INIT                0x08u
 #define AOU_INIT_ACTIVATE_START (1u << 0)
